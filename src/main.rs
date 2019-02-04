@@ -6,6 +6,9 @@ use secp::Secp256k1;
 use secp::key::SecretKey;
 use secp::pedersen::Commitment;
 
+mod exchange;
+mod nizk;
+
 fn main() {
     let mut hasher = Sha256::new();
     hasher.input(b"Hello, world!");
