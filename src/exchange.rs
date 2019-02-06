@@ -3,6 +3,10 @@ use rand::seq::SliceRandom;
 use secp256k1zkp as secp;
 use secp::Secp256k1;
 use secp::key::{SecretKey, PublicKey, ZERO_KEY};
+use secp::pedersen::Commitment;
+use secp::ffi;
+use secp::constants;
+
 use super::nizk::RevelioSPK;
 
 const MAX_AMOUNT_PER_OUTPUT: u64 = 1000;
@@ -61,6 +65,8 @@ impl GrinExchange{
         amounts[i] = rng.gen_range(0, MAX_AMOUNT_PER_OUTPUT);
         revproof.anon_list[i] = Secp256k1::commit(&secp_inst, amounts[i], okeys[i]).unwrap()
                                   .to_pubkey(&secp_inst).unwrap();
+        revproof.keyimage_list[i] = GrinExchange::create_keyimage(&okeys[i], amounts[i])
+                                      .to_pubkey(&secp_inst).unwrap();
       } else {
         let temp_sk = SecretKey::new(&secp_inst, &mut rng);
         revproof.anon_list[i] = PublicKey::from_secret_key(&secp_inst, &temp_sk).unwrap();
@@ -77,5 +83,36 @@ impl GrinExchange{
       own_amounts: amounts,
       decoy_keys: dkeys,
     }
+  }
+
+  /// Generating key image commitment
+  fn create_keyimage(blinding: &SecretKey, amount: u64) -> Commitment {
+    let flag = ffi::SECP256K1_START_SIGN | ffi::SECP256K1_START_VERIFY;
+    let ctx = unsafe { ffi::secp256k1_context_create(flag) };
+
+    let mut commit_i = [0; constants::PEDERSEN_COMMITMENT_SIZE_INTERNAL];
+
+    unsafe {
+      ffi::secp256k1_pedersen_commit(
+        ctx,
+        commit_i.as_mut_ptr(),
+        blinding.as_ptr(),
+        amount,
+        constants::GENERATOR_PUB_J_RAW.as_ptr(),
+        constants::GENERATOR_G.as_ptr(),
+      )
+    };
+
+    let mut commit_o = unsafe {
+      let mut c_out = Commitment::from_vec(vec![0; constants::PEDERSEN_COMMITMENT_SIZE]);
+      ffi::secp256k1_pedersen_commitment_serialize(
+        ctx,
+        c_out.as_mut_ptr(),
+        commit_i.as_ptr(),
+      );
+      c_out
+    };
+    unsafe { ffi::secp256k1_context_destroy(ctx) };
+    commit_o
   }
 }
