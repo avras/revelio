@@ -13,6 +13,7 @@ pub const MINUS_ONE_KEY: SecretKey = SecretKey([
     0xbf, 0xd2, 0x5e, 0x8c, 0xd0, 0x36, 0x41, 0x40
 ]);
 
+#[derive(Copy, Clone)]
 pub struct RevelioSPK {
   c1: SecretKey,
   c2: SecretKey,

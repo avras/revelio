@@ -23,10 +23,11 @@ pub struct RevelioProof {
 impl RevelioProof {
   pub fn new(anon_list_size: usize) -> RevelioProof {
     let zeropk = PublicKey::new();
+    let empty_spk = RevelioSPK::new();
     RevelioProof {
       anon_list: vec![zeropk; anon_list_size],
       keyimage_list: vec![zeropk; anon_list_size],
-      spk_list: Vec::new(),
+      spk_list: vec![empty_spk; anon_list_size],
       blinding_basepoint: zeropk,
       value_basepoint: zeropk,
       keyimage_basepoint: zeropk,
@@ -150,7 +151,7 @@ impl GrinExchange{
     commit_o
   }
 
-  pub fn generate_proof(&mut self) -> () {
+  pub fn generate_proof(&mut self) -> RevelioProof {
 
     for i in 0..self.anon_list_size {
       if self.own_keys[i] != ZERO_KEY {
@@ -174,6 +175,15 @@ impl GrinExchange{
                                           );
       } // end if-else
     } // end for
+
+    RevelioProof {
+      anon_list: self.revelio_proof.anon_list.clone(),
+      keyimage_list: self.revelio_proof.keyimage_list.clone(),
+      spk_list: self.revelio_proof.spk_list.clone(),
+      blinding_basepoint: self.revelio_proof.blinding_basepoint,
+      value_basepoint: self.revelio_proof.value_basepoint,
+      keyimage_basepoint: self.revelio_proof.keyimage_basepoint,
+    }
   } // end generate_proof
 
 }
