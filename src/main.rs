@@ -6,6 +6,7 @@ use secp::Secp256k1;
 use secp::key::{SecretKey, PublicKey, ONE_KEY, ZERO_KEY};
 use secp::pedersen::Commitment;
 use nizk::MINUS_ONE_KEY;
+use exchange::GrinExchange;
 
 mod exchange;
 mod nizk;
@@ -45,6 +46,15 @@ fn main() {
     ah.mul_assign(&secp_inst, &amount_scalar).unwrap();    //25*H
     let skg_ah = PublicKey::from_combination(&secp_inst, vec![&pk, &ah]).unwrap(); // sk*G + 25*H
     assert!(c_pk == skg_ah); // Check the commitment public key is the same via both calculations
+
+    let mut grin_exch = GrinExchange::new(100, 10);
+    let revelio_proof = grin_exch.generate_proof();
+    if revelio_proof.verify() == true {
+      println!("Proof verification succeeded");
+    } else {
+      println!("Proof verification failed");
+    }
+
 
 }
 
