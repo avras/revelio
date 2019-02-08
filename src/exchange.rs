@@ -93,8 +93,7 @@ impl GrinExchange{
         amounts[i] = rng.gen_range(0, MAX_AMOUNT_PER_OUTPUT);
         revproof.anon_list[i] = Secp256k1::commit(&secp_inst, amounts[i], okeys[i]).unwrap()
                                   .to_pubkey(&secp_inst).unwrap();
-        revproof.keyimage_list[i] = GrinExchange::create_keyimage(amounts[i], okeys[i])
-                                      .to_pubkey(&secp_inst).unwrap();
+        revproof.keyimage_list[i] = GrinExchange::create_keyimage(amounts[i], okeys[i]);
       } else {
         let temp_sk = SecretKey::new(&secp_inst, &mut rng);
         revproof.anon_list[i] = PublicKey::from_secret_key(&secp_inst, &temp_sk).unwrap();
@@ -107,8 +106,7 @@ impl GrinExchange{
                           .to_pubkey(&secp_inst).unwrap();                 // 1*G + 0*H
     revproof.value_basepoint = Secp256k1::commit(&secp_inst, 1, ZERO_KEY).unwrap()
                           .to_pubkey(&secp_inst).unwrap();                 // 0*G + 1*H
-    revproof.keyimage_basepoint = GrinExchange::create_keyimage(0, ONE_KEY)
-                          .to_pubkey(&secp_inst).unwrap();                 // 1*G' +0*H
+    revproof.keyimage_basepoint = GrinExchange::create_keyimage(0, ONE_KEY);   // 1*G' +0*H
 
     GrinExchange {
       anon_list_size: alist_size,
@@ -121,34 +119,19 @@ impl GrinExchange{
   }
 
   /// Generating key image commitment
-  pub fn create_keyimage(amount: u64, blinding: SecretKey) -> Commitment {
-    let flag = ffi::SECP256K1_START_SIGN | ffi::SECP256K1_START_VERIFY;
-    let ctx = unsafe { ffi::secp256k1_context_create(flag) };
+  pub fn create_keyimage(amount: u64, blinding: SecretKey) -> PublicKey {
+    let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
+    let keyimage_gen = PublicKey::from_slice(&secp_inst, &constants::GENERATOR_PUB_J_RAW).unwrap();
+    let value_gen = PublicKey::from_slice(&secp_inst, &constants::GENERATOR_H).unwrap();
 
-    let mut commit_i = [0; constants::PEDERSEN_COMMITMENT_SIZE_INTERNAL];
+    let mut blind_gp = keyimage_gen.clone();
+    blind_gp.mul_assign(&secp_inst, &blinding).unwrap();
 
-    unsafe {
-      ffi::secp256k1_pedersen_commit(
-        ctx,
-        commit_i.as_mut_ptr(),
-        blinding.as_ptr(),
-        amount,
-        constants::GENERATOR_H.as_ptr(),
-        constants::GENERATOR_PUB_J_RAW.as_ptr(),
-      )
-    };
+    let amount_sk = RevelioSPK::amount_to_key(&secp_inst, amount);
+    let mut amount_pk = value_gen.clone();
+    amount_pk.mul_assign(&secp_inst, &amount_sk).unwrap();
 
-    let commit_o = unsafe {
-      let mut c_out = Commitment::from_vec(vec![0; constants::PEDERSEN_COMMITMENT_SIZE]);
-      ffi::secp256k1_pedersen_commitment_serialize(
-        ctx,
-        c_out.as_mut_ptr(),
-        commit_i.as_ptr(),
-      );
-      c_out
-    };
-    unsafe { ffi::secp256k1_context_destroy(ctx) };
-    commit_o
+    PublicKey::from_combination(&secp_inst, vec![&blind_gp, &amount_pk]).unwrap()
   }
 
   pub fn generate_proof(&mut self) -> RevelioProof {

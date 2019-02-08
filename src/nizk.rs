@@ -166,19 +166,23 @@ impl RevelioSPK {
     rspk.s1.mul_assign(&secp_inst, &rspk.c1).unwrap();          // s_1 = -c_1*alpha
     rspk.s1.add_assign(&secp_inst, &r1).unwrap();               // s_1 = r_1 - c_1*alpha
 
+    // Calculation of s_2
+    rspk.s2 = RevelioSPK::amount_to_key(&secp_inst, amount);                                    // s_2 = beta
+    rspk.s2.mul_assign(&secp_inst, &MINUS_ONE_KEY).unwrap();    // s_2 = -beta
+    rspk.s2.mul_assign(&secp_inst, &rspk.c1).unwrap();          // s_2 = -c_1*beta
+    rspk.s2.add_assign(&secp_inst, &r2).unwrap();               // s_2 = r_2 - c_1*beta
+
+    rspk
+  }
+  
+  pub fn amount_to_key (secp_inst: &Secp256k1, amount: u64) -> SecretKey {
     // Converting u64 amount to a scalar i.e. SecretKey
     let amount_as_bytes = amount.to_be_bytes();
     let mut amount_scalar_vec = vec![0u8; 24];
     amount_scalar_vec.extend_from_slice(&amount_as_bytes);
     let amount_scalar = SecretKey::from_slice(&secp_inst, amount_scalar_vec.as_slice()).unwrap();
 
-    // Calculation of s_2
-    rspk.s2 = amount_scalar;                                    // s_2 = beta
-    rspk.s2.mul_assign(&secp_inst, &MINUS_ONE_KEY).unwrap();    // s_2 = -beta
-    rspk.s2.mul_assign(&secp_inst, &rspk.c1).unwrap();          // s_2 = -c_1*beta
-    rspk.s2.add_assign(&secp_inst, &r2).unwrap();               // s_2 = r_2 - c_1*beta
-
-    rspk
+    amount_scalar
   }
 
   pub fn verify_spk (

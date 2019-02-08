@@ -7,6 +7,7 @@ use secp::key::{SecretKey, PublicKey, ONE_KEY, ZERO_KEY};
 use secp::pedersen::Commitment;
 use nizk::MINUS_ONE_KEY;
 use exchange::GrinExchange;
+use secp::constants;
 
 mod exchange;
 mod nizk;
@@ -47,14 +48,29 @@ fn main() {
     let skg_ah = PublicKey::from_combination(&secp_inst, vec![&pk, &ah]).unwrap(); // sk*G + 25*H
     assert!(c_pk == skg_ah); // Check the commitment public key is the same via both calculations
 
-    let mut grin_exch = GrinExchange::new(100, 10);
-    let revelio_proof = grin_exch.generate_proof();
-    if revelio_proof.verify() == true {
-      println!("Proof verification succeeded");
-    } else {
-      println!("Proof verification failed");
-    }
+    //let mut grin_exch = GrinExchange::new(10, 10);
+    //let revelio_proof = grin_exch.generate_proof();
+    //if revelio_proof.verify() == true {
+    //  println!("Proof verification succeeded");
+    //} else {
+    //  println!("Proof verification failed");
+    //}
 
+    //let ki_basepoint = GrinExchange::create_keyimage(0, ONE_KEY);            // 1*G' +0*H
+    //let mut blind_gp = ki_basepoint.clone();
+    //blind_gp.mul_assign(&secp_inst, &ONE_KEY).unwrap();                      // 1*G'
+    //assert!(ki_basepoint == blind_gp);
+
+    //let blind = SecretKey::new(&secp_inst, &mut thread_rng());
+    //blind_gp = ki_basepoint.clone();
+    //assert!(ki_basepoint == blind_gp);
+    //blind_gp.mul_assign(&secp_inst, &blind).unwrap();                      // blind*G'
+    //let keyimage1 = GrinExchange::create_keyimage(0, blind);               // blind*G' + 0*H
+    //assert!(keyimage1 == blind_gp);
+    //let keyimage2 = PublicKey::from_combination(&secp_inst, vec![&blind_gp, &ah]).unwrap();  // blind*G' + 25*H
+    //assert!(keyimage1 == keyimage2);
+
+    let keyimage_gen = PublicKey::from_slice(&secp_inst, &constants::GENERATOR_G).unwrap();
 
 }
 
