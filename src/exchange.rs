@@ -15,6 +15,9 @@ pub struct RevelioProof {
   pub anon_list: Vec<PublicKey>,
   pub keyimage_list: Vec<PublicKey>,
   pub spk_list: Vec<RevelioSPK>,
+  blinding_basepoint: PublicKey,
+  value_basepoint: PublicKey,
+  keyimage_basepoint: PublicKey,
 }
 
 impl RevelioProof {
@@ -24,7 +27,31 @@ impl RevelioProof {
       anon_list: vec![zeropk; anon_list_size],
       keyimage_list: vec![zeropk; anon_list_size],
       spk_list: Vec::new(),
+      blinding_basepoint: zeropk,
+      value_basepoint: zeropk,
+      keyimage_basepoint: zeropk,
     }
+  }
+
+  pub fn verify(&self) -> bool {
+    assert!(self.anon_list.len() == self.keyimage_list.len());
+    assert!(self.anon_list.len() == self.spk_list.len());
+    assert!(self.anon_list.len() != 0);
+
+    for i in 0..self.anon_list.len() {
+      if RevelioSPK::verify_spk(
+        &self.anon_list[i],
+        &self.keyimage_list[i],
+        &self.blinding_basepoint,
+        &self.value_basepoint,
+        &self.keyimage_basepoint,
+        &self.spk_list[i],
+      ) == false {
+        return false;
+      } // end if
+    } // end for
+
+    true
   }
 }
 
@@ -35,9 +62,6 @@ pub struct GrinExchange {
   own_keys: Vec<SecretKey>,
   own_amounts: Vec<u64>,
   decoy_keys: Vec<SecretKey>,
-  blinding_basepoint: PublicKey,
-  value_basepoint: PublicKey,
-  keyimage_basepoint: PublicKey,
 }
 
 impl GrinExchange{
@@ -78,11 +102,11 @@ impl GrinExchange{
       }
     }
 
-    let bl_basepoint = Secp256k1::commit(&secp_inst, 0, ONE_KEY).unwrap()
+    revproof.blinding_basepoint = Secp256k1::commit(&secp_inst, 0, ONE_KEY).unwrap()
                           .to_pubkey(&secp_inst).unwrap();                 // 1*G + 0*H
-    let v_basepoint = Secp256k1::commit(&secp_inst, 1, ZERO_KEY).unwrap()
+    revproof.value_basepoint = Secp256k1::commit(&secp_inst, 1, ZERO_KEY).unwrap()
                           .to_pubkey(&secp_inst).unwrap();                 // 0*G + 1*H
-    let ki_basepoint = GrinExchange::create_keyimage(0, ONE_KEY)
+    revproof.keyimage_basepoint = GrinExchange::create_keyimage(0, ONE_KEY)
                           .to_pubkey(&secp_inst).unwrap();                 // 1*G' +0*H
 
     GrinExchange {
@@ -92,9 +116,6 @@ impl GrinExchange{
       own_keys: okeys,
       own_amounts: amounts,
       decoy_keys: dkeys,
-      blinding_basepoint: bl_basepoint,
-      value_basepoint: v_basepoint,
-      keyimage_basepoint: ki_basepoint,
     }
   }
 
@@ -116,7 +137,7 @@ impl GrinExchange{
       )
     };
 
-    let mut commit_o = unsafe {
+    let commit_o = unsafe {
       let mut c_out = Commitment::from_vec(vec![0; constants::PEDERSEN_COMMITMENT_SIZE]);
       ffi::secp256k1_pedersen_commitment_serialize(
         ctx,
@@ -128,4 +149,31 @@ impl GrinExchange{
     unsafe { ffi::secp256k1_context_destroy(ctx) };
     commit_o
   }
+
+  pub fn generate_proof(&mut self) -> () {
+
+    for i in 0..self.anon_list_size {
+      if self.own_keys[i] != ZERO_KEY {
+        self.revelio_proof.spk_list[i] = RevelioSPK::create_spk_from_representation(
+                                            self.revelio_proof.anon_list[i],
+                                            self.revelio_proof.keyimage_list[i],
+                                            self.own_keys[i],
+                                            self.own_amounts[i],
+                                            self.revelio_proof.blinding_basepoint,  // G
+                                            self.revelio_proof.value_basepoint,     // H
+                                            self.revelio_proof.keyimage_basepoint,  // G'
+                                          );
+      } else {
+        self.revelio_proof.spk_list[i] = RevelioSPK::create_spk_from_decoykey(
+                                            self.revelio_proof.anon_list[i],
+                                            self.revelio_proof.keyimage_list[i],
+                                            self.decoy_keys[i],
+                                            self.revelio_proof.blinding_basepoint,  // G
+                                            self.revelio_proof.value_basepoint,     // H
+                                            self.revelio_proof.keyimage_basepoint,  // G'
+                                          );
+      } // end if-else
+    } // end for
+  } // end generate_proof
+
 }
