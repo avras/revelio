@@ -121,7 +121,7 @@ impl GrinExchange{
   }
 
   /// Generating key image commitment
-  fn create_keyimage(amount: u64, blinding: SecretKey) -> Commitment {
+  pub fn create_keyimage(amount: u64, blinding: SecretKey) -> Commitment {
     let flag = ffi::SECP256K1_START_SIGN | ffi::SECP256K1_START_VERIFY;
     let ctx = unsafe { ffi::secp256k1_context_create(flag) };
 
