@@ -119,7 +119,7 @@ impl GrinExchange{
 
     for i in 0..alist_size {
       if okeys[i] != ZERO_KEY {
-        amounts[i] = rng.gen_range(0, MAX_AMOUNT_PER_OUTPUT);
+        amounts[i] = rng.gen_range(1, MAX_AMOUNT_PER_OUTPUT);
         revproof.anon_list[i] = Secp256k1::commit(&secp_inst, amounts[i], okeys[i]).unwrap()
                                   .to_pubkey(&secp_inst).unwrap();
         revproof.keyimage_list[i] = GrinExchange::create_keyimage(amounts[i], okeys[i]); // I_i = alpha*G' + beta*H

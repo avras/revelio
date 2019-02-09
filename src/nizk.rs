@@ -172,6 +172,7 @@ impl RevelioSPK {
   }
   
   pub fn amount_to_key (secp_inst: &Secp256k1, amount: u64) -> SecretKey {
+    assert!(amount != 0);
     // Converting u64 amount to a scalar i.e. SecretKey
     let amount_as_bytes = amount.to_be_bytes();
     let mut amount_scalar_vec = vec![0u8; 24];
