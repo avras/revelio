@@ -241,7 +241,7 @@ mod test {
   use secp256k1zkp as secp;
   use secp::Secp256k1;
   use secp::key::{SecretKey, PublicKey, ZERO_KEY, ONE_KEY};
-  use super::RevelioSPK;
+  use super::{RevelioSPK, MINUS_ONE_KEY};
   use super::super::exchange::GrinExchange;
 
 
@@ -317,4 +317,40 @@ mod test {
                             );
     assert!(result);
   }
+
+  #[test]
+  fn check_minus_one_key() {
+    let mut rng = thread_rng();
+    let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
+
+    let (mut sk, pk) = secp_inst.generate_keypair(&mut rng).unwrap();
+
+    sk.add_assign(&secp_inst, &ONE_KEY).unwrap(); // Added one to the secret key sk
+    let pk1 = PublicKey::from_secret_key(&secp_inst, &sk).unwrap();               // pk1 = (sk+1)*G
+    let pk2 = PublicKey::from_secret_key(&secp_inst, &MINUS_ONE_KEY).unwrap();    // pk2 = (-1)*G
+    let pk3 = PublicKey::from_combination(&secp_inst, vec![&pk1, &pk2]).unwrap(); // pk3 = pk1+pk2
+    assert!(pk3 == pk);  // Check that (sk+1)*G + (-1)*G = sk*G
+  }
+
+  #[test]
+  fn check_amount_to_key() {
+    let mut rng = thread_rng();
+    let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
+
+    let (sk, pk) = secp_inst.generate_keypair(&mut rng).unwrap();  // pk = sk*G
+    let amount = 25;
+    let c_pk = Secp256k1::commit(&secp_inst, amount, sk).unwrap()
+                  .to_pubkey(&secp_inst).unwrap();                 // sk*G + 25*H
+
+    let value_basepoint = Secp256k1::commit(&secp_inst, 1, ZERO_KEY).unwrap()
+                              .to_pubkey(&secp_inst).unwrap();     // 0*G + 1*H
+    let amount_scalar = RevelioSPK::amount_to_key(&secp_inst, amount);
+
+    let mut ah = value_basepoint.clone();
+    ah.mul_assign(&secp_inst, &amount_scalar).unwrap();    //25*H
+    let skg_ah = PublicKey::from_combination(&secp_inst, vec![&pk, &ah]).unwrap(); // sk*G + 25*H
+
+    assert!(c_pk == skg_ah); // Check the commitment public key is the same via both calculations
+  }
+
 }
