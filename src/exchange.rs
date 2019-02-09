@@ -122,12 +122,12 @@ impl GrinExchange{
         amounts[i] = rng.gen_range(0, MAX_AMOUNT_PER_OUTPUT);
         revproof.anon_list[i] = Secp256k1::commit(&secp_inst, amounts[i], okeys[i]).unwrap()
                                   .to_pubkey(&secp_inst).unwrap();
-        revproof.keyimage_list[i] = GrinExchange::create_keyimage(amounts[i], okeys[i]);
+        revproof.keyimage_list[i] = GrinExchange::create_keyimage(amounts[i], okeys[i]); // I_i = alpha*G' + beta*H
       } else {
         let temp_sk = SecretKey::new(&secp_inst, &mut rng);
         revproof.anon_list[i] = PublicKey::from_secret_key(&secp_inst, &temp_sk).unwrap();
         dkeys[i] = SecretKey::new(&secp_inst, &mut rng);
-        revproof.keyimage_list[i] = PublicKey::from_secret_key(&secp_inst, &dkeys[i]).unwrap();
+        revproof.keyimage_list[i] = GrinExchange::create_keyimage(0, dkeys[i]); // I_i = gamma*G' + 0*H
       }
     }
 
