@@ -87,7 +87,6 @@ impl RevelioProof {
 
 pub struct GrinExchange {
   anon_list_size: usize,
-  own_list_size: usize,
   revelio_proof: RevelioProof,
   own_keys: Vec<SecretKey>,
   own_amounts: Vec<u64>,
@@ -137,7 +136,6 @@ impl GrinExchange{
 
     GrinExchange {
       anon_list_size: alist_size,
-      own_list_size: olist_size,
       revelio_proof: revproof,
       own_keys: okeys,
       own_amounts: amounts,
