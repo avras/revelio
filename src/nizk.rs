@@ -123,20 +123,17 @@ impl RevelioSPK {
     let mut c2_y = keyimage.clone();
     c2_y.mul_assign(&secp_inst, &rspk.c2).unwrap();
     let v3 = PublicKey::from_combination(&secp_inst, vec![&s3_gp, &c2_y]).unwrap();
-    //println!("Generation V3 = {:?}", v3);
 
     // Calculation of r_1*G + r_2*H
     let r1_g = PublicKey::from_secret_key(&secp_inst, &r1).unwrap();
     let mut r2_h = value_gen.clone();
     r2_h.mul_assign(&secp_inst, &r2).unwrap();
     let r1g_r2h = PublicKey::from_combination(&secp_inst, vec![&r1_g, &r2_h]).unwrap();
-    //println!("Generation V1 = {:?}", r1g_r2h);
 
     // Calculation of r_1*G' + r_2*H
     let mut r1_gp = keyimage_gen.clone();
     r1_gp.mul_assign(&secp_inst, &r1).unwrap();
     let r1gp_r2h = PublicKey::from_combination(&secp_inst, vec![&r1_gp, &r2_h]).unwrap();
-    //println!("Generation V2 = {:?}", r1gp_r2h);
 
     // Calculation of H(S || r_1*G + r_2*H || r_1*G'+r_2*H || V_3)
     let mut hasher = Sha256::new();
@@ -150,7 +147,6 @@ impl RevelioSPK {
     hasher.input(v3.serialize_vec(&secp_inst, true));           // Hash V_3
 
     let hash_scalar = SecretKey::from_slice(&secp_inst, &hasher.result()).unwrap();
-    //println!("{:?}", hash_scalar);
 
     // Calculation of -c_2
     let mut minus_c2 = rspk.c2;
@@ -202,7 +198,6 @@ impl RevelioSPK {
     let mut c1_x = output.clone();
     c1_x.mul_assign(&secp_inst, &rspk.c1).unwrap();
     let v1 = PublicKey::from_combination(&secp_inst, vec![&s1_g, &s2_h, &c1_x]).unwrap();
-    //println!("V1 = {:?}", v1);
 
     // Calculation of V_2 = s_1*G' + s_2*H + c_1*Y   where Y = I_i
     let mut s1_gp = keyimage_gen.clone();
@@ -210,7 +205,6 @@ impl RevelioSPK {
     let mut c1_y = keyimage.clone();
     c1_y.mul_assign(&secp_inst, &rspk.c1).unwrap();
     let v2 = PublicKey::from_combination(&secp_inst, vec![&s1_gp, &s2_h, &c1_y]).unwrap();
-    //println!("V2 = {:?}", v2);
 
     // Calculation of V_3 = s_3*G' + c_2*Y   where Y = I_i
     let mut s3_gp = keyimage_gen.clone();
@@ -218,7 +212,6 @@ impl RevelioSPK {
     let mut c2_y = keyimage.clone();
     c2_y.mul_assign(&secp_inst, &rspk.c2).unwrap();
     let v3 = PublicKey::from_combination(&secp_inst, vec![&s3_gp, &c2_y]).unwrap();
-    //println!("V3 = {:?}", v3);
 
     // Calculation of H(S || V_1 || V_2 || V_3)
     let mut hasher = Sha256::new();
@@ -232,7 +225,6 @@ impl RevelioSPK {
     hasher.input(v3.serialize_vec(&secp_inst, true));           // Hash V_3
 
     let hash_scalar = SecretKey::from_slice(&secp_inst, &hasher.result()).unwrap();
-    //println!("{:?}", hash_scalar);
 
     let mut c_sum = rspk.c1;
     c_sum.add_assign(&secp_inst, &rspk.c2).unwrap();
@@ -264,8 +256,7 @@ mod test {
                               .to_pubkey(&secp_inst).unwrap();                 // 1*G + 0*H
     let value_basepoint = Secp256k1::commit(&secp_inst, 1, ZERO_KEY).unwrap()
                               .to_pubkey(&secp_inst).unwrap();                 // 0*G + 1*H
-    let keyimage_basepoint = GrinExchange::create_keyimage(0, ONE_KEY)
-                              .to_pubkey(&secp_inst).unwrap();                 // 1*G' +0*H
+    let keyimage_basepoint = GrinExchange::create_keyimage(0, ONE_KEY);        // 1*G' +0*H
 
     let dkey = SecretKey::new(&secp_inst, &mut rng);
     let mut keyimage = keyimage_basepoint.clone();
@@ -299,15 +290,13 @@ mod test {
     let amount = 250u64;
     let output = Secp256k1::commit(&secp_inst, amount, blind).unwrap()
                               .to_pubkey(&secp_inst).unwrap();
-    let keyimage = GrinExchange::create_keyimage(amount, blind)
-                              .to_pubkey(&secp_inst).unwrap();
+    let keyimage = GrinExchange::create_keyimage(amount, blind);
 
     let blinding_basepoint = Secp256k1::commit(&secp_inst, 0, ONE_KEY).unwrap()
                               .to_pubkey(&secp_inst).unwrap();                 // 1*G + 0*H
     let value_basepoint = Secp256k1::commit(&secp_inst, 1, ZERO_KEY).unwrap()
                               .to_pubkey(&secp_inst).unwrap();                 // 0*G + 1*H
-    let keyimage_basepoint = GrinExchange::create_keyimage(0, ONE_KEY)
-                              .to_pubkey(&secp_inst).unwrap();                 // 1*G' +0*H
+    let keyimage_basepoint = GrinExchange::create_keyimage(0, ONE_KEY);        // 1*G' +0*H
 
     let rspk = RevelioSPK::create_spk_from_representation(
                               output,
