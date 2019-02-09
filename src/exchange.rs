@@ -2,10 +2,7 @@ use rand::{thread_rng, Rng};
 use rand::seq::SliceRandom;
 use secp256k1zkp as secp;
 use secp::Secp256k1;
-use secp::key::{SecretKey, PublicKey, ZERO_KEY, ONE_KEY};
-use secp::pedersen::Commitment;
-use secp::ffi;
-use secp::constants;
+use secp::key::{SecretKey, PublicKey, ZERO_KEY};
 
 use super::nizk::RevelioSPK;
 
@@ -134,11 +131,9 @@ impl GrinExchange{
       }
     }
 
-    revproof.blinding_basepoint = Secp256k1::commit(&secp_inst, 0, ONE_KEY).unwrap()
-                          .to_pubkey(&secp_inst).unwrap();                 // 1*G + 0*H
-    revproof.value_basepoint = Secp256k1::commit(&secp_inst, 1, ZERO_KEY).unwrap()
-                          .to_pubkey(&secp_inst).unwrap();                 // 0*G + 1*H
-    revproof.keyimage_basepoint = GrinExchange::create_keyimage(0, ONE_KEY);   // 1*G' +0*H
+    revproof.blinding_basepoint = PublicKey::from_slice(&secp_inst, &GENERATOR_G).unwrap();
+    revproof.value_basepoint = PublicKey::from_slice(&secp_inst, &GENERATOR_H).unwrap();
+    revproof.keyimage_basepoint = PublicKey::from_slice(&secp_inst, &GENERATOR_J_COMPR).unwrap();
 
     GrinExchange {
       anon_list_size: alist_size,
@@ -206,4 +201,32 @@ impl GrinExchange{
     }
   } // end generate_proof
 
+}
+
+#[cfg(test)]
+mod test {
+  use secp256k1zkp as secp;
+  use secp::Secp256k1;
+  use secp::key::{PublicKey, ZERO_KEY, ONE_KEY};
+  use super::{GENERATOR_G, GENERATOR_H, GENERATOR_J_COMPR};
+  use super::GrinExchange;
+
+
+  #[test]
+  fn check_generators() {
+    let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
+    let blind_gen1 = Secp256k1::commit(&secp_inst, 0, ONE_KEY).unwrap()
+                              .to_pubkey(&secp_inst).unwrap();                  // 1*G + 0*H
+    let value_gen1 = Secp256k1::commit(&secp_inst, 1, ZERO_KEY).unwrap()
+                              .to_pubkey(&secp_inst).unwrap();                  // 0*G + 1*H
+    let keyim_gen1 = GrinExchange::create_keyimage(0, ONE_KEY);              // 1*G' +0*H
+
+    let blind_gen2 = PublicKey::from_slice(&secp_inst, &GENERATOR_G).unwrap();
+    let value_gen2 = PublicKey::from_slice(&secp_inst, &GENERATOR_H).unwrap();
+    let keyim_gen2 = PublicKey::from_slice(&secp_inst, &GENERATOR_J_COMPR).unwrap();
+
+    assert!(blind_gen1 == blind_gen2);
+    assert!(value_gen1 == value_gen2);
+    assert!(keyim_gen1 == keyim_gen2);
+  }
 }
