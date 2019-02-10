@@ -12,4 +12,4 @@ grin_secp256k1zkp = "0.7.4"
 structopt = "0.2"
 
 [profile.release]
-debug = true
+debug = false
