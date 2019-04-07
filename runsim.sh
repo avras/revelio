@@ -1,1 +1,1 @@
-cargo run --release 10000 7500 -n 100
+cargo run --release 100 75 -n 1

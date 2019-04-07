@@ -234,6 +234,24 @@ impl RevelioSPK {
   }
 }
 
+#[derive(Copy, Clone)]
+pub struct RepresentationSPK {
+  c:  SecretKey,
+  s1: SecretKey,
+  s2: SecretKey,
+}
+
+impl RepresentationSPK {
+  pub fn new() -> RepresentationSPK {
+    RepresentationSPK {
+      c:  ZERO_KEY,
+      s1: ZERO_KEY,
+      s2: ZERO_KEY,
+    }
+  }
+
+}
+
 
 
 #[cfg(test)]
