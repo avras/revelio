@@ -4,7 +4,7 @@ use secp256k1zkp as secp;
 use secp::Secp256k1;
 use secp::key::{SecretKey, PublicKey, ZERO_KEY};
 
-use super::nizk::RevelioSPK;
+use super::nizk::{RevelioSPK, RepresentationSPK};
 
 const MAX_AMOUNT_PER_OUTPUT: u64 = 1000;
 
@@ -85,9 +85,48 @@ impl RevelioProof {
   }
 }
 
+pub struct SimpleProof {
+  pub own_list: Vec<(PublicKey, SecretKey, u64)>,
+  pub rep_spk: RepresentationSPK,
+  blinding_basepoint: PublicKey,
+  value_basepoint: PublicKey,
+}
+
+impl SimpleProof {
+  pub fn new(own_list_size: usize) -> SimpleProof {
+    let zeropk = PublicKey::new();
+    let empty_spk = RepresentationSPK::new();
+    SimpleProof {
+      own_list: vec![(zeropk, ZERO_KEY, 0u64); own_list_size],
+      rep_spk: empty_spk,
+      blinding_basepoint: zeropk,
+      value_basepoint: zeropk,
+    }
+  }
+
+  pub fn verify(&self) -> bool {
+    assert!(self.own_list.len() != 0);
+
+    let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
+
+    let mut x = PublicKey::new();
+    for (output, _, _) in &self.own_list {
+      x = PublicKey::from_combination(&secp_inst, vec![&x, &output]).unwrap(); // x = x + output
+    }
+    
+    RepresentationSPK::verify_representation_spk(
+      &x,
+      &self.blinding_basepoint,
+      &self.value_basepoint,
+      &self.rep_spk,
+    )
+  }
+}
+
 pub struct GrinExchange {
   anon_list_size: usize,
   revelio_proof: RevelioProof,
+  simple_proof: SimpleProof,
   own_keys: Vec<SecretKey>,
   own_amounts: Vec<u64>,
   decoy_keys: Vec<SecretKey>,
@@ -97,6 +136,7 @@ impl GrinExchange{
   pub fn new(alist_size: usize, olist_size: usize) -> GrinExchange {
 
     let mut revproof = RevelioProof::new(alist_size);
+    let mut simproof = SimpleProof::new(olist_size);
     let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
     let mut okeys = Vec::new();
     let mut amounts = vec![0u64; alist_size];
@@ -115,12 +155,12 @@ impl GrinExchange{
     // Randomly permuting the own outputs
     okeys.shuffle(&mut rng);
 
-
     for i in 0..alist_size {
       if okeys[i] != ZERO_KEY {
         amounts[i] = rng.gen_range(1, MAX_AMOUNT_PER_OUTPUT);
         revproof.anon_list[i] = Secp256k1::commit(&secp_inst, amounts[i], okeys[i]).unwrap()
                                   .to_pubkey(&secp_inst).unwrap();
+        simproof.own_list.push((revproof.anon_list[i], okeys[i], amounts[i]));
         revproof.keyimage_list[i] = GrinExchange::create_keyimage(amounts[i], okeys[i]); // I_i = alpha*G' + beta*H
       } else {
         let temp_sk = SecretKey::new(&secp_inst, &mut rng);
@@ -134,9 +174,13 @@ impl GrinExchange{
     revproof.value_basepoint = PublicKey::from_slice(&secp_inst, &GENERATOR_H).unwrap();
     revproof.keyimage_basepoint = PublicKey::from_slice(&secp_inst, &GENERATOR_J_COMPR).unwrap();
 
+    simproof.blinding_basepoint = revproof.blinding_basepoint;
+    simproof.value_basepoint = simproof.value_basepoint;
+
     GrinExchange {
       anon_list_size: alist_size,
       revelio_proof: revproof,
+      simple_proof: simproof,
       own_keys: okeys,
       own_amounts: amounts,
       decoy_keys: dkeys,

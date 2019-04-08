@@ -250,6 +250,80 @@ impl RepresentationSPK {
     }
   }
 
+pub fn create_representation_spk (
+    output: PublicKey,
+    blinding_factor: SecretKey, // alpha
+    amount: u64,                // beta
+    blinding_gen: PublicKey,    // G
+    value_gen: PublicKey,       // H
+  ) -> RepresentationSPK {
+    let mut rng = thread_rng();
+    let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
+
+    let mut rep_spk = RepresentationSPK::new();
+    let r1 = SecretKey::new(&secp_inst, &mut rng);
+    let r2 = SecretKey::new(&secp_inst, &mut rng);
+
+    // Calculation of r_1*G + r_2*H
+    let r1_g = PublicKey::from_secret_key(&secp_inst, &r1).unwrap();
+    let mut r2_h = value_gen.clone();
+    r2_h.mul_assign(&secp_inst, &r2).unwrap();
+    let r1g_r2h = PublicKey::from_combination(&secp_inst, vec![&r1_g, &r2_h]).unwrap();
+
+    // Calculation of H(S || r_1*G + r_2*H)
+    let mut hasher = Sha256::new();
+    hasher.input(blinding_gen.serialize_vec(&secp_inst, true)); // Hash G
+    hasher.input(value_gen.serialize_vec(&secp_inst, true));    // Hash H
+    hasher.input(output.serialize_vec(&secp_inst, true));       // Hash \sum C_i
+    hasher.input(r1g_r2h.serialize_vec(&secp_inst, true));      // Hash r_1*G + r_2*H
+
+    let hash_scalar = SecretKey::from_slice(&secp_inst, &hasher.result()).unwrap();
+
+    // Calculation of c
+    rep_spk.c = hash_scalar;                                       // c = H(S...V_3)
+
+    // Calculation of s_1
+    rep_spk.s1 = blinding_factor;                                  // s_1 = alpha
+    rep_spk.s1.mul_assign(&secp_inst, &MINUS_ONE_KEY).unwrap();    // s_1 = -alpha
+    rep_spk.s1.mul_assign(&secp_inst, &rep_spk.c).unwrap();         // s_1 = -c*alpha
+    rep_spk.s1.add_assign(&secp_inst, &r1).unwrap();               // s_1 = r_1 - c*alpha
+
+    // Calculation of s_2
+    rep_spk.s2 = RevelioSPK::amount_to_key(&secp_inst, amount);    // s_2 = beta
+    rep_spk.s2.mul_assign(&secp_inst, &MINUS_ONE_KEY).unwrap();    // s_2 = -beta
+    rep_spk.s2.mul_assign(&secp_inst, &rep_spk.c).unwrap();         // s_2 = -c*beta
+    rep_spk.s2.add_assign(&secp_inst, &r2).unwrap();               // s_2 = r_2 - c*beta
+
+    rep_spk
+  }
+
+  pub fn verify_representation_spk (
+    output: &PublicKey,
+    blinding_gen: &PublicKey, // G
+    value_gen: &PublicKey,    // H
+    rep_spk: &RepresentationSPK,
+  ) -> bool {
+    let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
+
+    // Calculation of V = s_1*G + s_2*H + c*X    where X = \sum C_i
+    let s1_g = PublicKey::from_secret_key(&secp_inst, &rep_spk.s1).unwrap();
+    let mut s2_h = value_gen.clone();
+    s2_h.mul_assign(&secp_inst, &rep_spk.s2).unwrap();
+    let mut c_x = output.clone();
+    c_x.mul_assign(&secp_inst, &rep_spk.c).unwrap();
+    let v = PublicKey::from_combination(&secp_inst, vec![&s1_g, &s2_h, &c_x]).unwrap();
+
+    // Calculation of H(S || V)
+    let mut hasher = Sha256::new();
+    hasher.input(blinding_gen.serialize_vec(&secp_inst, true)); // Hash G
+    hasher.input(value_gen.serialize_vec(&secp_inst, true));    // Hash H
+    hasher.input(output.serialize_vec(&secp_inst, true));       // Hash \sum C_i
+    hasher.input(v.serialize_vec(&secp_inst, true));           // Hash V
+
+    let hash_scalar = SecretKey::from_slice(&secp_inst, &hasher.result()).unwrap();
+
+    rep_spk.c == hash_scalar
+  }
 }
 
 
