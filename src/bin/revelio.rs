@@ -1,11 +1,9 @@
 extern crate structopt;
+extern crate revelio;
 use structopt::StructOpt;
 
 use std::time::{Instant, Duration};
-use exchange::RevelioGrinExchange;
-
-mod exchange;
-mod nizk;
+use revelio::exchange::RevelioGrinExchange;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "revelio", about = "Revelio proof generation simulator.")]
