@@ -170,7 +170,7 @@ impl RevelioSPK {
 
     rspk
   }
-  
+
   pub fn amount_to_key (secp_inst: &Secp256k1, amount: u64) -> SecretKey {
     assert!(amount != 0);
     // Converting u64 amount to a scalar i.e. SecretKey
@@ -334,12 +334,12 @@ mod test {
   use secp256k1zkp as secp;
   use secp::Secp256k1;
   use secp::key::{SecretKey, PublicKey, ZERO_KEY, ONE_KEY};
-  use super::{RevelioSPK, MINUS_ONE_KEY};
-  use super::super::exchange::GrinExchange;
+  use super::{RevelioSPK, RepresentationSPK, MINUS_ONE_KEY};
+  use super::super::exchange::RevelioGrinExchange;
 
 
   #[test]
-  fn decoy_spk_gen_verify() {
+  fn revelio_decoy_spk_gen_verify() {
     let mut rng = thread_rng();
     let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
 
@@ -349,7 +349,7 @@ mod test {
                               .to_pubkey(&secp_inst).unwrap();                 // 1*G + 0*H
     let value_basepoint = Secp256k1::commit(&secp_inst, 1, ZERO_KEY).unwrap()
                               .to_pubkey(&secp_inst).unwrap();                 // 0*G + 1*H
-    let keyimage_basepoint = GrinExchange::create_keyimage(0, ONE_KEY);        // 1*G' +0*H
+    let keyimage_basepoint = RevelioGrinExchange::create_keyimage(0, ONE_KEY);        // 1*G' +0*H
 
     let dkey = SecretKey::new(&secp_inst, &mut rng);
     let mut keyimage = keyimage_basepoint.clone();
@@ -375,7 +375,7 @@ mod test {
   }
 
   #[test]
-  fn representation_spk_gen_verify() {
+  fn revelio_representation_spk_gen_verify() {
     let mut rng = thread_rng();
     let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
 
@@ -383,13 +383,13 @@ mod test {
     let amount = 250u64;
     let output = Secp256k1::commit(&secp_inst, amount, blind).unwrap()
                               .to_pubkey(&secp_inst).unwrap();
-    let keyimage = GrinExchange::create_keyimage(amount, blind);
+    let keyimage = RevelioGrinExchange::create_keyimage(amount, blind);
 
     let blinding_basepoint = Secp256k1::commit(&secp_inst, 0, ONE_KEY).unwrap()
                               .to_pubkey(&secp_inst).unwrap();                 // 1*G + 0*H
     let value_basepoint = Secp256k1::commit(&secp_inst, 1, ZERO_KEY).unwrap()
                               .to_pubkey(&secp_inst).unwrap();                 // 0*G + 1*H
-    let keyimage_basepoint = GrinExchange::create_keyimage(0, ONE_KEY);        // 1*G' +0*H
+    let keyimage_basepoint = RevelioGrinExchange::create_keyimage(0, ONE_KEY);        // 1*G' +0*H
 
     let rspk = RevelioSPK::create_spk_from_representation(
                               output,
@@ -408,6 +408,49 @@ mod test {
                               &keyimage_basepoint,
                               &rspk,
                             );
+    assert!(result);
+  }
+
+  #[test]
+  fn simple_representation_spk_gen_verify() {
+    let mut rng = thread_rng();
+    let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
+
+    let blind1 = SecretKey::new(&secp_inst, &mut rng);
+    let blind2 = SecretKey::new(&secp_inst, &mut rng);
+    let amount1 = 250u64;
+    let amount2 = 350u64;
+
+    let output1 = Secp256k1::commit(&secp_inst, amount1, blind1).unwrap()
+                              .to_pubkey(&secp_inst).unwrap();
+    let output2 = Secp256k1::commit(&secp_inst, amount2, blind2).unwrap()
+                              .to_pubkey(&secp_inst).unwrap();
+
+    let blinding_basepoint = Secp256k1::commit(&secp_inst, 0, ONE_KEY).unwrap()
+                              .to_pubkey(&secp_inst).unwrap();                 // 1*G + 0*H
+    let value_basepoint = Secp256k1::commit(&secp_inst, 1, ZERO_KEY).unwrap()
+                              .to_pubkey(&secp_inst).unwrap();                 // 0*G + 1*H
+
+    let mut blind = blind1;
+    blind.add_assign(&secp_inst, &blind2).unwrap();
+
+    let output = PublicKey::from_combination(&secp_inst, vec![&output1, &output2]).unwrap();
+    let amount = amount1 + amount2;
+
+    let rep_spk = RepresentationSPK::create_representation_spk(
+                    output,
+                    blind,
+                    amount,
+                    blinding_basepoint,
+                    value_basepoint,
+                  );
+    let result = RepresentationSPK::verify_representation_spk(
+                    &output,
+                    &blinding_basepoint,
+                    &value_basepoint,
+                    &rep_spk,
+                  );
+
     assert!(result);
   }
 

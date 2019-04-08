@@ -2,7 +2,7 @@ extern crate structopt;
 use structopt::StructOpt;
 
 use std::time::{Instant, Duration};
-use exchange::GrinExchange;
+use exchange::RevelioGrinExchange;
 
 mod exchange;
 mod nizk;
@@ -22,7 +22,7 @@ fn main() {
     let opt = Opt::from_args();
 
     let num_iter = opt.num_iter;
-    let mut grin_exch = GrinExchange::new(opt.anon_list_size, opt.own_list_size);
+    let mut grin_exch = RevelioGrinExchange::new(opt.anon_list_size, opt.own_list_size);
     let mut revelio_proof;
     let mut gen_proof_start;
     let mut gen_proof_end;

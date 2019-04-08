@@ -40,6 +40,109 @@ pub const GENERATOR_J_COMPR : [u8;33] = [
     0x2a, 0x01, 0x93, 0x93, 0x36, 0x21, 0x15, 0x5f
 ];
 
+pub struct SimpleProof {
+  pub own_list: Vec<PublicKey>,
+  pub rep_spk: RepresentationSPK,
+  blinding_basepoint: PublicKey,
+  value_basepoint: PublicKey,
+}
+
+impl SimpleProof {
+  pub fn new(own_list_size: usize) -> SimpleProof {
+    let zeropk = PublicKey::new();
+    let empty_spk = RepresentationSPK::new();
+    SimpleProof {
+      own_list: vec![zeropk; own_list_size],
+      rep_spk: empty_spk,
+      blinding_basepoint: zeropk,
+      value_basepoint: zeropk,
+    }
+  }
+
+  pub fn verify(&self) -> bool {
+    assert!(self.own_list.len() != 0);
+
+    let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
+
+    let mut sum_outputs = PublicKey::new();
+    for output in &self.own_list {
+      sum_outputs = PublicKey::from_combination(&secp_inst, vec![&sum_outputs, &output]).unwrap(); // sum_outputs += output
+    }
+
+    RepresentationSPK::verify_representation_spk(
+      &sum_outputs,
+      &self.blinding_basepoint,
+      &self.value_basepoint,
+      &self.rep_spk,
+    )
+  }
+}
+
+pub struct SimpleGrinExchange {
+  own_list_size: usize,
+  simple_proof: SimpleProof,
+  own_keys: Vec<SecretKey>,
+  own_amounts: Vec<u64>,
+}
+
+impl SimpleGrinExchange {
+  pub fn new(olist_size: usize) -> SimpleGrinExchange  {
+
+    let mut simproof = SimpleProof::new(olist_size);
+    let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
+    let mut okeys = vec![ZERO_KEY; olist_size];
+    let mut amounts = vec![0u64; olist_size];
+
+    let mut rng = thread_rng();
+
+    for i in 0..olist_size {
+      okeys[i] = SecretKey::new(&secp_inst, &mut rng);
+      amounts[i] = rng.gen_range(1, MAX_AMOUNT_PER_OUTPUT);
+      simproof.own_list[i] = Secp256k1::commit(&secp_inst, amounts[i], okeys[i]).unwrap()
+                                .to_pubkey(&secp_inst).unwrap();
+    }
+
+    simproof.blinding_basepoint = PublicKey::from_slice(&secp_inst, &GENERATOR_G).unwrap();
+    simproof.value_basepoint = PublicKey::from_slice(&secp_inst, &GENERATOR_H).unwrap();
+
+    SimpleGrinExchange  {
+      own_list_size: olist_size,
+      simple_proof: simproof,
+      own_keys: okeys,
+      own_amounts: amounts,
+    }
+  }
+
+  pub fn generate_proof(&mut self) -> SimpleProof {
+
+    let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
+    let mut sum_outputs = PublicKey::new();
+    let mut total_blinding_factor = ZERO_KEY;
+    let mut sum_amount = 0u64;
+
+    for i in 0..self.own_list_size {
+      sum_outputs = PublicKey::from_combination(&secp_inst, vec![&sum_outputs, &self.simple_proof.own_list[i]]).unwrap(); // sum_outputs += output
+      total_blinding_factor.add_assign(&secp_inst, &self.own_keys[i]).unwrap();
+      sum_amount += &self.own_amounts[i];
+    }
+
+    self.simple_proof.rep_spk = RepresentationSPK::create_representation_spk(
+                                  sum_outputs,
+                                  total_blinding_factor,
+                                  sum_amount,
+                                  self.simple_proof.blinding_basepoint, // G
+                                  self.simple_proof.value_basepoint,    // H
+                                );
+
+    SimpleProof {
+      own_list: self.simple_proof.own_list.clone(),
+      rep_spk: self.simple_proof.rep_spk.clone(),
+      blinding_basepoint: self.simple_proof.blinding_basepoint,
+      value_basepoint: self.simple_proof.value_basepoint,
+    }
+  } // end generate_proof
+} // end SimpleGrinExchange implementation
+
 pub struct RevelioProof {
   pub anon_list: Vec<PublicKey>,
   pub keyimage_list: Vec<PublicKey>,
@@ -85,58 +188,18 @@ impl RevelioProof {
   }
 }
 
-pub struct SimpleProof {
-  pub own_list: Vec<(PublicKey, SecretKey, u64)>,
-  pub rep_spk: RepresentationSPK,
-  blinding_basepoint: PublicKey,
-  value_basepoint: PublicKey,
-}
-
-impl SimpleProof {
-  pub fn new(own_list_size: usize) -> SimpleProof {
-    let zeropk = PublicKey::new();
-    let empty_spk = RepresentationSPK::new();
-    SimpleProof {
-      own_list: vec![(zeropk, ZERO_KEY, 0u64); own_list_size],
-      rep_spk: empty_spk,
-      blinding_basepoint: zeropk,
-      value_basepoint: zeropk,
-    }
-  }
-
-  pub fn verify(&self) -> bool {
-    assert!(self.own_list.len() != 0);
-
-    let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
-
-    let mut x = PublicKey::new();
-    for (output, _, _) in &self.own_list {
-      x = PublicKey::from_combination(&secp_inst, vec![&x, &output]).unwrap(); // x = x + output
-    }
-    
-    RepresentationSPK::verify_representation_spk(
-      &x,
-      &self.blinding_basepoint,
-      &self.value_basepoint,
-      &self.rep_spk,
-    )
-  }
-}
-
-pub struct GrinExchange {
+pub struct RevelioGrinExchange {
   anon_list_size: usize,
   revelio_proof: RevelioProof,
-  simple_proof: SimpleProof,
   own_keys: Vec<SecretKey>,
   own_amounts: Vec<u64>,
   decoy_keys: Vec<SecretKey>,
 }
 
-impl GrinExchange{
-  pub fn new(alist_size: usize, olist_size: usize) -> GrinExchange {
+impl RevelioGrinExchange {
+  pub fn new(alist_size: usize, olist_size: usize) -> RevelioGrinExchange  {
 
     let mut revproof = RevelioProof::new(alist_size);
-    let mut simproof = SimpleProof::new(olist_size);
     let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
     let mut okeys = Vec::new();
     let mut amounts = vec![0u64; alist_size];
@@ -160,13 +223,12 @@ impl GrinExchange{
         amounts[i] = rng.gen_range(1, MAX_AMOUNT_PER_OUTPUT);
         revproof.anon_list[i] = Secp256k1::commit(&secp_inst, amounts[i], okeys[i]).unwrap()
                                   .to_pubkey(&secp_inst).unwrap();
-        simproof.own_list.push((revproof.anon_list[i], okeys[i], amounts[i]));
-        revproof.keyimage_list[i] = GrinExchange::create_keyimage(amounts[i], okeys[i]); // I_i = alpha*G' + beta*H
+        revproof.keyimage_list[i] = RevelioGrinExchange ::create_keyimage(amounts[i], okeys[i]); // I_i = alpha*G' + beta*H
       } else {
         let temp_sk = SecretKey::new(&secp_inst, &mut rng);
         revproof.anon_list[i] = PublicKey::from_secret_key(&secp_inst, &temp_sk).unwrap();
         dkeys[i] = SecretKey::new(&secp_inst, &mut rng);
-        revproof.keyimage_list[i] = GrinExchange::create_keyimage(0, dkeys[i]); // I_i = gamma*G' + 0*H
+        revproof.keyimage_list[i] = RevelioGrinExchange ::create_keyimage(0, dkeys[i]); // I_i = gamma*G' + 0*H
       }
     }
 
@@ -174,13 +236,9 @@ impl GrinExchange{
     revproof.value_basepoint = PublicKey::from_slice(&secp_inst, &GENERATOR_H).unwrap();
     revproof.keyimage_basepoint = PublicKey::from_slice(&secp_inst, &GENERATOR_J_COMPR).unwrap();
 
-    simproof.blinding_basepoint = revproof.blinding_basepoint;
-    simproof.value_basepoint = simproof.value_basepoint;
-
-    GrinExchange {
+    RevelioGrinExchange  {
       anon_list_size: alist_size,
       revelio_proof: revproof,
-      simple_proof: simproof,
       own_keys: okeys,
       own_amounts: amounts,
       decoy_keys: dkeys,
@@ -243,7 +301,7 @@ impl GrinExchange{
     }
   } // end generate_proof
 
-}
+} // end RevelioGrinExchange implementation
 
 #[cfg(test)]
 mod test {
@@ -251,7 +309,7 @@ mod test {
   use secp::Secp256k1;
   use secp::key::{PublicKey, ZERO_KEY, ONE_KEY};
   use super::{GENERATOR_G, GENERATOR_H, GENERATOR_J_COMPR};
-  use super::GrinExchange;
+  use super::RevelioGrinExchange ;
 
 
   #[test]
@@ -261,7 +319,7 @@ mod test {
                               .to_pubkey(&secp_inst).unwrap();                  // 1*G + 0*H
     let value_gen1 = Secp256k1::commit(&secp_inst, 1, ZERO_KEY).unwrap()
                               .to_pubkey(&secp_inst).unwrap();                  // 0*G + 1*H
-    let keyim_gen1 = GrinExchange::create_keyimage(0, ONE_KEY);              // 1*G' +0*H
+    let keyim_gen1 = RevelioGrinExchange ::create_keyimage(0, ONE_KEY);              // 1*G' +0*H
 
     let blind_gen2 = PublicKey::from_slice(&secp_inst, &GENERATOR_G).unwrap();
     let value_gen2 = PublicKey::from_slice(&secp_inst, &GENERATOR_H).unwrap();
