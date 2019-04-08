@@ -64,8 +64,8 @@ impl SimpleProof {
 
     let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
 
-    let mut sum_outputs = PublicKey::new();
-    for output in &self.own_list {
+    let mut sum_outputs = self.own_list[0];
+    for output in &self.own_list[1..] {
       sum_outputs = PublicKey::from_combination(&secp_inst, vec![&sum_outputs, &output]).unwrap(); // sum_outputs += output
     }
 
@@ -116,11 +116,11 @@ impl SimpleGrinExchange {
   pub fn generate_proof(&mut self) -> SimpleProof {
 
     let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
-    let mut sum_outputs = PublicKey::new();
-    let mut total_blinding_factor = ZERO_KEY;
-    let mut sum_amount = 0u64;
+    let mut sum_outputs = self.simple_proof.own_list[0];
+    let mut total_blinding_factor = self.own_keys[0];
+    let mut sum_amount = self.own_amounts[0];
 
-    for i in 0..self.own_list_size {
+    for i in 1..self.own_list_size {
       sum_outputs = PublicKey::from_combination(&secp_inst, vec![&sum_outputs, &self.simple_proof.own_list[i]]).unwrap(); // sum_outputs += output
       total_blinding_factor.add_assign(&secp_inst, &self.own_keys[i]).unwrap();
       sum_amount += &self.own_amounts[i];
