@@ -6,7 +6,7 @@ use secp256k1zkp as secp;
 use secp::Secp256k1;
 use secp::key::{SecretKey, PublicKey, ZERO_KEY};
 
-use super::nizk::{RevelioSPK, RepresentationSPK};
+use super::nizk::{RevelioPoK, RepresentationPoK};
 
 const MAX_AMOUNT_PER_OUTPUT: u64 = 1000;
 
@@ -44,7 +44,7 @@ pub const GENERATOR_J_COMPR : [u8;33] = [
 
 pub struct SimpleProof {
   pub own_list: Vec<PublicKey>,
-  pub rep_spk: RepresentationSPK,
+  pub rep_spk: RepresentationPoK,
   blinding_basepoint: PublicKey,
   value_basepoint: PublicKey,
 }
@@ -52,7 +52,7 @@ pub struct SimpleProof {
 impl SimpleProof {
   pub fn new(own_list_size: usize) -> SimpleProof {
     let zeropk = PublicKey::new();
-    let empty_spk = RepresentationSPK::new();
+    let empty_spk = RepresentationPoK::new();
     SimpleProof {
       own_list: vec![zeropk; own_list_size],
       rep_spk: empty_spk,
@@ -71,7 +71,7 @@ impl SimpleProof {
       sum_outputs = PublicKey::from_combination(&secp_inst, vec![&sum_outputs, &output]).unwrap(); // sum_outputs += output
     }
 
-    RepresentationSPK::verify_representation_spk(
+    RepresentationPoK::verify_representation_spk(
       &sum_outputs,
       &self.blinding_basepoint,
       &self.value_basepoint,
@@ -128,7 +128,7 @@ impl SimpleGrinExchange {
       sum_amount += &self.own_amounts[i];
     }
 
-    self.simple_proof.rep_spk = RepresentationSPK::create_representation_spk(
+    self.simple_proof.rep_spk = RepresentationPoK::create_representation_spk(
                                   sum_outputs,
                                   total_blinding_factor,
                                   sum_amount,
@@ -148,7 +148,7 @@ impl SimpleGrinExchange {
 pub struct RevelioProof {
   pub anon_list: Vec<PublicKey>,
   pub keyimage_list: Vec<PublicKey>,
-  pub spk_list: Vec<RevelioSPK>,
+  pub spk_list: Vec<RevelioPoK>,
   blinding_basepoint: PublicKey,
   value_basepoint: PublicKey,
   keyimage_basepoint: PublicKey,
@@ -157,7 +157,7 @@ pub struct RevelioProof {
 impl RevelioProof {
   pub fn new(anon_list_size: usize) -> RevelioProof {
     let zeropk = PublicKey::new();
-    let empty_spk = RevelioSPK::new();
+    let empty_spk = RevelioPoK::new();
     RevelioProof {
       anon_list: vec![zeropk; anon_list_size],
       keyimage_list: vec![zeropk; anon_list_size],
@@ -174,7 +174,7 @@ impl RevelioProof {
     assert!(self.anon_list.len() != 0);
 
     for i in 0..self.anon_list.len() {
-      if RevelioSPK::verify_spk(
+      if RevelioPoK::verify_spk(
         &self.anon_list[i],
         &self.keyimage_list[i],
         &self.blinding_basepoint,
@@ -270,7 +270,7 @@ impl RevelioGrinExchange {
     let keyimage = if amount == 0u64 {
       blind_gp
     } else {
-      let amount_sk = RevelioSPK::amount_to_key(&secp_inst, amount);
+      let amount_sk = RevelioPoK::amount_to_key(&secp_inst, amount);
       let mut amount_pk = value_gen.clone();
       amount_pk.mul_assign(&secp_inst, &amount_sk).unwrap();
 
@@ -283,7 +283,7 @@ impl RevelioGrinExchange {
 
     for i in 0..self.anon_list_size {
       if self.own_keys[i] != ZERO_KEY {
-        self.revelio_proof.spk_list[i] = RevelioSPK::create_spk_from_representation(
+        self.revelio_proof.spk_list[i] = RevelioPoK::create_spk_from_representation(
                                             self.revelio_proof.anon_list[i],
                                             self.revelio_proof.keyimage_list[i],
                                             self.own_keys[i],
@@ -293,7 +293,7 @@ impl RevelioGrinExchange {
                                             self.revelio_proof.keyimage_basepoint,  // G'
                                           );
       } else {
-        self.revelio_proof.spk_list[i] = RevelioSPK::create_spk_from_decoykey(
+        self.revelio_proof.spk_list[i] = RevelioPoK::create_spk_from_decoykey(
                                             self.revelio_proof.anon_list[i],
                                             self.revelio_proof.keyimage_list[i],
                                             self.decoy_keys[i],

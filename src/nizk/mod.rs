@@ -14,7 +14,7 @@ pub const MINUS_ONE_KEY: SecretKey = SecretKey([
 ]);
 
 #[derive(Copy, Clone)]
-pub struct RevelioSPK {
+pub struct RevelioPoK {
   c1: SecretKey,
   c2: SecretKey,
   s1: SecretKey,
@@ -22,9 +22,9 @@ pub struct RevelioSPK {
   s3: SecretKey,
 }
 
-impl RevelioSPK {
-  pub fn new() -> RevelioSPK {
-    RevelioSPK {
+impl RevelioPoK {
+  pub fn new() -> RevelioPoK {
+    RevelioPoK {
       c1: ZERO_KEY,
       c2: ZERO_KEY,
       s1: ZERO_KEY,
@@ -40,11 +40,11 @@ impl RevelioSPK {
     blinding_gen: PublicKey, // G
     value_gen: PublicKey,    // H
     keyimage_gen: PublicKey, // G'
-  ) -> RevelioSPK {
+  ) -> RevelioPoK {
     let mut rng = thread_rng();
     let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
 
-    let mut rspk = RevelioSPK::new();
+    let mut rspk = RevelioPoK::new();
     let r3 = SecretKey::new(&secp_inst, &mut rng);
     rspk.c1 = SecretKey::new(&secp_inst, &mut rng);
     rspk.s1 = SecretKey::new(&secp_inst, &mut rng);
@@ -107,11 +107,11 @@ impl RevelioSPK {
     blinding_gen: PublicKey, // G
     value_gen: PublicKey,    // H
     keyimage_gen: PublicKey, // G'
-  ) -> RevelioSPK {
+  ) -> RevelioPoK {
     let mut rng = thread_rng();
     let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
 
-    let mut rspk = RevelioSPK::new();
+    let mut rspk = RevelioPoK::new();
     let r1 = SecretKey::new(&secp_inst, &mut rng);
     let r2 = SecretKey::new(&secp_inst, &mut rng);
     rspk.c2 = SecretKey::new(&secp_inst, &mut rng);
@@ -163,7 +163,7 @@ impl RevelioSPK {
     rspk.s1.add_assign(&secp_inst, &r1).unwrap();               // s_1 = r_1 - c_1*alpha
 
     // Calculation of s_2
-    rspk.s2 = RevelioSPK::amount_to_key(&secp_inst, amount);                                    // s_2 = beta
+    rspk.s2 = RevelioPoK::amount_to_key(&secp_inst, amount);                                    // s_2 = beta
     rspk.s2.mul_assign(&secp_inst, &MINUS_ONE_KEY).unwrap();    // s_2 = -beta
     rspk.s2.mul_assign(&secp_inst, &rspk.c1).unwrap();          // s_2 = -c_1*beta
     rspk.s2.add_assign(&secp_inst, &r2).unwrap();               // s_2 = r_2 - c_1*beta
@@ -188,7 +188,7 @@ impl RevelioSPK {
     blinding_gen: &PublicKey, // G
     value_gen: &PublicKey,    // H
     keyimage_gen: &PublicKey, // G'
-    rspk: &RevelioSPK
+    rspk: &RevelioPoK
   ) -> bool {
     let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
 
@@ -235,15 +235,15 @@ impl RevelioSPK {
 }
 
 #[derive(Copy, Clone)]
-pub struct RepresentationSPK {
+pub struct RepresentationPoK {
   c:  SecretKey,
   s1: SecretKey,
   s2: SecretKey,
 }
 
-impl RepresentationSPK {
-  pub fn new() -> RepresentationSPK {
-    RepresentationSPK {
+impl RepresentationPoK {
+  pub fn new() -> RepresentationPoK {
+    RepresentationPoK {
       c:  ZERO_KEY,
       s1: ZERO_KEY,
       s2: ZERO_KEY,
@@ -256,11 +256,11 @@ pub fn create_representation_spk (
     amount: u64,                // beta
     blinding_gen: PublicKey,    // G
     value_gen: PublicKey,       // H
-  ) -> RepresentationSPK {
+  ) -> RepresentationPoK {
     let mut rng = thread_rng();
     let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
 
-    let mut rep_spk = RepresentationSPK::new();
+    let mut rep_spk = RepresentationPoK::new();
     let r1 = SecretKey::new(&secp_inst, &mut rng);
     let r2 = SecretKey::new(&secp_inst, &mut rng);
 
@@ -289,7 +289,7 @@ pub fn create_representation_spk (
     rep_spk.s1.add_assign(&secp_inst, &r1).unwrap();               // s_1 = r_1 - c*alpha
 
     // Calculation of s_2
-    rep_spk.s2 = RevelioSPK::amount_to_key(&secp_inst, amount);    // s_2 = beta
+    rep_spk.s2 = RevelioPoK::amount_to_key(&secp_inst, amount);    // s_2 = beta
     rep_spk.s2.mul_assign(&secp_inst, &MINUS_ONE_KEY).unwrap();    // s_2 = -beta
     rep_spk.s2.mul_assign(&secp_inst, &rep_spk.c).unwrap();         // s_2 = -c*beta
     rep_spk.s2.add_assign(&secp_inst, &r2).unwrap();               // s_2 = r_2 - c*beta
@@ -301,7 +301,7 @@ pub fn create_representation_spk (
     output: &PublicKey,
     blinding_gen: &PublicKey, // G
     value_gen: &PublicKey,    // H
-    rep_spk: &RepresentationSPK,
+    rep_spk: &RepresentationPoK,
   ) -> bool {
     let secp_inst = Secp256k1::with_caps(secp::ContextFlag::Commit);
 
@@ -334,7 +334,7 @@ mod test {
   use secp256k1zkp as secp;
   use secp::Secp256k1;
   use secp::key::{SecretKey, PublicKey, ZERO_KEY, ONE_KEY};
-  use super::{RevelioSPK, RepresentationSPK, MINUS_ONE_KEY};
+  use super::{RevelioPoK, RepresentationPoK, MINUS_ONE_KEY};
   use super::super::exchange::RevelioGrinExchange;
 
 
@@ -355,7 +355,7 @@ mod test {
     let mut keyimage = keyimage_basepoint.clone();
     keyimage.mul_assign(&secp_inst, &dkey).unwrap();
 
-    let rspk = RevelioSPK::create_spk_from_decoykey(
+    let rspk = RevelioPoK::create_spk_from_decoykey(
                               output,
                               keyimage,
                               dkey,
@@ -363,7 +363,7 @@ mod test {
                               value_basepoint,
                               keyimage_basepoint,
                             );
-    let result = RevelioSPK::verify_spk(
+    let result = RevelioPoK::verify_spk(
                               &output,
                               &keyimage,
                               &blinding_basepoint,
@@ -391,7 +391,7 @@ mod test {
                               .to_pubkey(&secp_inst).unwrap();                 // 0*G + 1*H
     let keyimage_basepoint = RevelioGrinExchange::create_keyimage(0, ONE_KEY);        // 1*G' +0*H
 
-    let rspk = RevelioSPK::create_spk_from_representation(
+    let rspk = RevelioPoK::create_spk_from_representation(
                               output,
                               keyimage,
                               blind,
@@ -400,7 +400,7 @@ mod test {
                               value_basepoint,
                               keyimage_basepoint,
                             );
-    let result = RevelioSPK::verify_spk(
+    let result = RevelioPoK::verify_spk(
                               &output,
                               &keyimage,
                               &blinding_basepoint,
@@ -437,14 +437,14 @@ mod test {
     let output = PublicKey::from_combination(&secp_inst, vec![&output1, &output2]).unwrap();
     let amount = amount1 + amount2;
 
-    let rep_spk = RepresentationSPK::create_representation_spk(
+    let rep_spk = RepresentationPoK::create_representation_spk(
                     output,
                     blind,
                     amount,
                     blinding_basepoint,
                     value_basepoint,
                   );
-    let result = RepresentationSPK::verify_representation_spk(
+    let result = RepresentationPoK::verify_representation_spk(
                     &output,
                     &blinding_basepoint,
                     &value_basepoint,
@@ -480,7 +480,7 @@ mod test {
 
     let value_basepoint = Secp256k1::commit(&secp_inst, 1, ZERO_KEY).unwrap()
                               .to_pubkey(&secp_inst).unwrap();     // 0*G + 1*H
-    let amount_scalar = RevelioSPK::amount_to_key(&secp_inst, amount);
+    let amount_scalar = RevelioPoK::amount_to_key(&secp_inst, amount);
 
     let mut ah = value_basepoint.clone();
     ah.mul_assign(&secp_inst, &amount_scalar).unwrap();    //25*H
