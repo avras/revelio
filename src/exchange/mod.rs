@@ -1,3 +1,5 @@
+use digest::Digest;
+use sha2::Sha256;
 use rand::{thread_rng, Rng};
 use rand::seq::SliceRandom;
 use secp256k1zkp as secp;
@@ -193,6 +195,7 @@ pub struct RevelioGrinExchange {
   revelio_proof: RevelioProof,
   own_keys: Vec<SecretKey>,
   own_amounts: Vec<u64>,
+  _decoy_keys_seed: SecretKey,
   decoy_keys: Vec<SecretKey>,
 }
 
@@ -218,6 +221,12 @@ impl RevelioGrinExchange {
     // Randomly permuting the own outputs
     okeys.shuffle(&mut rng);
 
+    // Long-term secret key used to seed creation of decoy keys
+    let dkeys_seed = SecretKey::new(&secp_inst, &mut rng);
+
+    // Initialize SHA256 to generate decoy keys
+    let mut hasher = Sha256::new();
+
     for i in 0..alist_size {
       if okeys[i] != ZERO_KEY {
         amounts[i] = rng.gen_range(1, MAX_AMOUNT_PER_OUTPUT);
@@ -227,8 +236,11 @@ impl RevelioGrinExchange {
       } else {
         let temp_sk = SecretKey::new(&secp_inst, &mut rng);
         revproof.anon_list[i] = PublicKey::from_secret_key(&secp_inst, &temp_sk).unwrap();
-        dkeys[i] = SecretKey::new(&secp_inst, &mut rng);
-        revproof.keyimage_list[i] = RevelioGrinExchange ::create_keyimage(0, dkeys[i]); // I_i = gamma*G' + 0*H
+        hasher.input(dkeys_seed);                                                  // Hash k_exch
+        hasher.input(revproof.anon_list[i].serialize_vec(&secp_inst, true));       // Hash C_i
+        dkeys[i] = SecretKey::from_slice(&secp_inst, &hasher.clone().result()).unwrap();
+        revproof.keyimage_list[i] = RevelioGrinExchange ::create_keyimage(0, dkeys[i]); // I_i = SHA256(k_exch, C_i)*G' + 0*H
+        hasher.reset();
       }
     }
 
@@ -241,6 +253,7 @@ impl RevelioGrinExchange {
       revelio_proof: revproof,
       own_keys: okeys,
       own_amounts: amounts,
+      _decoy_keys_seed: dkeys_seed,
       decoy_keys: dkeys,
     }
   }
